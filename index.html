@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cook2You - Interactive Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Fresh & Trustworthy -->
+    <!-- Application Structure Plan: The SPA is structured into four main, scrollable sections: Home, Chef Booking, HealthMe, and FarMarGro, accessible via a sticky top navigation bar. This single-page, section-based architecture was chosen to mimic the fluid, tab-like navigation of a modern mobile app, allowing users to explore all core features without leaving the page. Interactions like chef filtering, package selection, and meal planning are handled within modals or dynamic content areas to maintain context and create a focused, step-by-step user journey, directly translating the multi-screen Figma flow into a cohesive single-page experience. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Chef listings with multiple categories. -> Goal: Organize/Compare. -> Viz/Method: Interactive card grid. -> Interaction: Users click filter pills (e.g., 'Veg', 'Italian'), and JS dynamically shows/hides chef cards based on data attributes. -> Justification: Intuitive Browse experience common in e-commerce and booking apps. -> Library/Method: HTML/CSS/JS.
+        - Report Info: Package deals for chefs. -> Goal: Compare/Convert. -> Viz/Method: Side-by-side selectable cards in a modal. -> Interaction: Clicking a package card highlights it and updates a state object, with a 'Best Value' tag drawing attention. -> Justification: Clearly presents choices and uses framing to guide user decisions. -> Library/Method: HTML/CSS/JS.
+        - Report Info: Dynamic billing based on selected dishes. -> Goal: Inform/Build Trust. -> Viz/Method: An interactive list that updates a summary panel in real-time. -> Interaction: User adds dishes; JS calculates and displays estimated time and cost. A crucial disclaimer is always visible. -> Justification: Provides transparent, immediate feedback on a complex pricing model, which is essential for user trust. -> Library/Method: HTML/CSS/JS.
+        - Report Info: HealthMe feature with dietary profiles. -> Goal: Personalize/Inform. -> Viz/Method: A multi-step form and a Doughnut chart for nutritional breakdown. -> Interaction: User fills the form; JS filters recommendations. The chart updates based on selected dishes. -> Justification: The form simplifies data entry, while the chart provides a quick, visual summary of health data, adding value. -> Library/Method: Chart.js for the chart, HTML/CSS/JS for the form.
+        - NEW: Report Info: Personalized meal plan generation. -> Goal: Personalize/Engage. -> Viz/Method: Textual meal plan output with nutritional summary. -> Interaction: User clicks "Generate Meal Plan" button; LLM generates a multi-day plan based on health profile. -> Justification: Provides a highly personalized and dynamic feature, enhancing user engagement and utility. -> Library/Method: Gemini API (gemini-2.0-flash) for text generation, HTML/CSS/JS for display.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #F7FAFC; }
+        .nav-link { transition: color 0.3s, border-bottom-color 0.3s; }
+        .nav-link:hover, .nav-link.active { color: #4CAF50; border-bottom-color: #4CAF50; }
+        .pill-active { background-color: #4CAF50; color: white; }
+        .modal { display: none; }
+        .modal-open { display: flex; }
+        .chart-container { position: relative; width: 100%; max-width: 350px; margin-left: auto; margin-right: auto; height: 350px; }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4CAF50;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Header / Navigation -->
+    <header id="header" class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex-shrink-0">
+                    <a href="#home" class="text-2xl font-bold text-green-600">Cook2You <span class="text-orange-500">.</span></a>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="#chef-booking" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 border-b-2 border-transparent">Book a Chef</a>
+                        <a href="#healthme" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 border-b-2 border-transparent">HealthMe</a>
+                        <a href="#farmargro" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 border-b-2 border-transparent">FarMarGro</a>
+                        <a href="#" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700 border-b-2 border-transparent">My Account</a>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-green-500 hover:bg-gray-100 focus:outline-none">
+                        <span class="sr-only">Open main menu</span>
+                        &#9776;
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#chef-booking" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">Book a Chef</a>
+                <a href="#healthme" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">HealthMe</a>
+                <a href="#farmargro" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">FarMarGro</a>
+                <a href="#" class="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">My Account</a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Home Section -->
+        <section id="home" class="py-16 md:py-24">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h1 class="text-4xl md:text-6xl font-bold tracking-tight">Your Kitchen, Your Chef, <span class="text-green-600">Your Way.</span></h1>
+                <p class="mt-4 md:mt-6 max-w-2xl mx-auto text-lg text-gray-600">Experience gourmet meals, personalized to your taste and health needs, cooked right in your own home. Explore our services below.</p>
+                <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                    <a href="#chef-booking" class="bg-green-500 text-white rounded-xl shadow-lg p-8 transform hover:-translate-y-1 transition-transform">
+                        <h3 class="font-bold text-2xl">Book a Chef</h3>
+                        <p class="mt-2">Find the perfect culinary expert for any occasion.</p>
+                    </a>
+                    <a href="#healthme" class="bg-blue-500 text-white rounded-xl shadow-lg p-8 transform hover:-translate-y-1 transition-transform">
+                        <h3 class="font-bold text-2xl">HealthMe</h3>
+                        <p class="mt-2">Curated meals that align with your wellness goals.</p>
+                    </a>
+                    <a href="#farmargro" class="bg-orange-500 text-white rounded-xl shadow-lg p-8 transform hover:-translate-y-1 transition-transform">
+                        <h3 class="font-bold text-2xl">FarMarGro</h3>
+                        <p class="mt-2">Organic groceries and appliance rentals.</p>
+                    </a
+                </div>
+            </div>
+        </section>
+
+        <!-- Chef Booking Section -->
+        <section id="chef-booking" class="py-16 md:py-24 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold">Find Your Perfect Chef</h2>
+                    <p class="mt-4 max-w-2xl mx-auto text-gray-600">This section allows you to discover and book professional chefs. Start by selecting your dietary preference, then filter by cuisine and expertise to find a chef that perfectly matches your needs for any meal or occasion.</p>
+                </div>
+
+                <!-- Filters -->
+                <div class="flex flex-col space-y-4 mb-8">
+                    <div>
+                        <span class="font-semibold mr-4">Dietary:</span>
+                        <div id="dietary-filter" class="inline-flex rounded-md shadow-sm" role="group">
+                            <button type="button" data-filter-group="diet" data-filter="veg" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-l-lg hover:bg-gray-100 pill-active">Veg</button>
+                            <button type="button" data-filter-group="diet" data-filter="non-veg" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 hover:bg-gray-100">Non-Veg</button>
+                            <button type="button" data-filter-group="diet" data-filter="jain" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-r-lg hover:bg-gray-100">Jain</button>
+                        </div>
+                    </div>
+                     <div>
+                        <span class="font-semibold mr-4">Cuisine:</span>
+                        <div id="cuisine-filter" class="inline-flex rounded-md shadow-sm flex-wrap gap-2" role="group">
+                            <button type="button" data-filter-group="cuisine" data-filter="all" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 pill-active">All</button>
+                            <button type="button" data-filter-group="cuisine" data-filter="indian" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100">Indian</button>
+                            <button type="button" data-filter-group="cuisine" data-filter="italian" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100">Italian</button>
+                            <button type="button" data-filter-group="cuisine" data-filter="chinese" class="filter-pill px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100">Chinese</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chef Grid -->
+                <div id="chef-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                </div>
+            </div>
+        </section>
+
+        <!-- HealthMe Section -->
+        <section id="healthme" class="py-16 md:py-24">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold">Nourish with <span class="text-blue-500">HealthMe</span></h2>
+                    <p class="mt-4 max-w-2xl mx-auto text-gray-600">HealthMe is your personal wellness assistant. By telling us your health goals and dietary needs, we curate personalized dish and chef recommendations. This interactive section helps you build a healthy meal plan and visualize its nutritional impact.</p>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                    <!-- Health Profile Setup -->
+                    <div class="bg-white p-8 rounded-xl shadow-md">
+                        <h3 class="text-2xl font-semibold mb-4">Create Your Health Profile</h3>
+                        <div class="space-y-6">
+                            <div>
+                                <label class="font-medium">1. What are your health goals?</label>
+                                <div id="health-goals" class="mt-2 space-x-2">
+                                    <button data-goal="weight-loss" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">Weight Loss</button>
+                                    <button data-goal="muscle-gain" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">Muscle Gain</button>
+                                    <button data-goal="wellness" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">General Wellness</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="font-medium">2. Any dietary restrictions?</label>
+                                <div id="health-restrictions" class="mt-2 space-x-2">
+                                    <button data-restriction="gluten-free" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">Gluten-Free</button>
+                                    <button data-restriction="dairy-free" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">Dairy-Free</button>
+                                    <button data-restriction="nut-allergy" class="health-pill px-3 py-1 text-sm border rounded-full hover:bg-gray-100">Nut Allergy</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="generate-meal-plan-btn" class="mt-8 w-full bg-blue-500 text-white font-bold py-3 rounded-lg hover:bg-blue-600 transition flex items-center justify-center">
+                            Generate Meal Plan ✨
+                            <span id="meal-plan-spinner" class="spinner ml-2 hidden"></span>
+                        </button>
+                    </div>
+                    <!-- Recommendations & Chart -->
+                    <div class="bg-white p-8 rounded-xl shadow-md">
+                        <h3 class="text-2xl font-semibold mb-4">Your Meal Plan</h3>
+                         <div id="health-recommendations" class="min-h-[100px] text-gray-500 overflow-y-auto max-h-96">
+                             Select goals and restrictions and click "Generate Meal Plan" to see recommendations.
+                         </div>
+                        <div class="mt-6">
+                            <h4 class="text-lg font-semibold text-center mb-2">Nutritional Breakdown</h4>
+                            <div class="chart-container">
+                                <canvas id="healthChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FarMarGro Section -->
+        <section id="farmargro" class="py-16 md:py-24 bg-white">
+            <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold"><span class="text-orange-500">FarMarGro</span> Marketplace</h2>
+                    <p class="mt-4 max-w-2xl mx-auto text-gray-600">Welcome to FarMarGro, your one-stop shop for kitchen needs. Here you can browse and purchase premium organic and indigenous groceries, or rent high-quality kitchen appliances for your culinary adventures. Use the tabs to switch between Groceries and Rentals.</p>
+                </div>
+                
+                <div class="text-sm font-medium text-center text-gray-500 border-b border-gray-200 mb-6">
+                    <ul class="flex flex-wrap -mb-px justify-center">
+                        <li class="mr-2">
+                            <a href="#" id="fmg-tab-groceries" class="farmargro-tab inline-block p-4 border-b-2 rounded-t-lg text-green-600 border-green-600" aria-current="page">Groceries</a>
+                        </li>
+                        <li class="mr-2">
+                            <a href="#" id="fmg-tab-appliances" class="farmargro-tab inline-block p-4 border-b-2 rounded-t-lg border-transparent hover:text-gray-600 hover:border-gray-300">Appliance Rentals</a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div id="farmargro-content">
+                    <div id="fmg-groceries" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        <!-- Groceries will be injected here by JS -->
+                    </div>
+                    <div id="fmg-appliances" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        <!-- Appliances will be injected here by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Chef Details Modal -->
+    <div id="chef-details-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div id="modal-content" class="p-8">
+                <!-- Content will be injected by JS -->
+            </div>
+            <div class="px-8 py-4 bg-gray-50 border-t flex justify-end">
+                <button onclick="closeModal('chef-details-modal')" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Billing Modal -->
+    <div id="billing-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <div class="p-8 flex-grow">
+                 <h2 class="text-3xl font-bold mb-6 text-center">Plan Your Meal & Estimate Cost</h2>
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Dish Selection -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4">Add Dishes</h3>
+                        <div id="dish-selection-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            <!-- Dishes injected here -->
+                        </div>
+                    </div>
+                    <!-- Billing Summary -->
+                    <div class="bg-gray-50 p-6 rounded-lg">
+                        <h3 class="text-xl font-semibold mb-4">Your Order Summary</h3>
+                        <div id="selected-dishes-list" class="space-y-2 min-h-[100px] mb-4">
+                           <p class="text-gray-500">Your selected dishes will appear here.</p>
+                        </div>
+                        <div class="border-t pt-4 space-y-3">
+                           <div class="flex justify-between items-center font-medium">
+                               <span>Estimated Cooking Time:</span>
+                               <span id="estimated-time">0 mins</span>
+                           </div>
+                           <div class="flex justify-between items-center font-medium">
+                               <span>Estimated Chef Cost (@ ₹250/hr):</span>
+                               <span id="estimated-chef-cost">₹0.00</span>
+                           </div>
+                           <div class="flex justify-between items-center">
+                                <label for="maid-service" class="font-medium">Add Maid Service (+₹200):</label>
+                                <input type="checkbox" id="maid-service" class="h-5 w-5 rounded text-green-600 focus:ring-green-500">
+                           </div>
+                           <div class="border-t pt-4 mt-4 flex justify-between items-center text-2xl font-bold">
+                               <span class="text-blue-600">Estimated Total:</span>
+                               <span id="estimated-total" class="text-blue-600">₹0.00</span>
+                           </div>
+                        </div>
+                        <div class="mt-6 bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-md">
+                           <p class="font-bold">Important Note</p>
+                           <p class="text-sm">This is an estimated bill. The final amount will be based on the actual time taken by the chef. Our monitoring system ensures fair and accurate billing.</p>
+                        </div>
+                    </div>
+                 </div>
+            </div>
+            <div class="px-8 py-4 bg-gray-50 border-t flex justify-between items-center">
+                <button onclick="closeModal('billing-modal')" class="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Back</button>
+                <button class="px-8 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">Proceed to Checkout</button>
+            </div>
+         </div>
+    </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    const chefData = [
+        { id: 1, name: 'Aarav Sharma', rating: 4.8, diet: 'veg', cuisine: 'indian', specialty: 'North Indian Expert', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+A', price: 250 },
+        { id: 2, name: 'Priya Patel', rating: 4.9, diet: 'veg', cuisine: 'italian', specialty: 'Pasta & Risotto Maestro', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+P', price: 300 },
+        { id: 3, name: 'Rohan Gupta', rating: 4.7, diet: 'non-veg', cuisine: 'indian', specialty: 'Mughlai Cuisine', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+R', price: 350 },
+        { id: 4, name: 'Sneha Reddy', rating: 4.6, diet: 'non-veg', cuisine: 'chinese', specialty: 'Authentic Szechuan', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+S', price: 320 },
+        { id: 5, name: 'Jignesh Mehta', rating: 4.9, diet: 'jain', cuisine: 'indian', specialty: 'Creative Jain Dishes', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+J', price: 280 },
+        { id: 6, name: 'Ananya Iyer', rating: 4.7, diet: 'veg', cuisine: 'indian', specialty: 'South Indian Delicacies', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+A', price: 260 },
+        { id: 7, name: 'Marco Bianchi', rating: 4.8, diet: 'non-veg', cuisine: 'italian', specialty: 'Tuscan Grill Master', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+M', price: 400 },
+        { id: 8, name: 'Li Wei', rating: 4.5, diet: 'veg', cuisine: 'chinese', specialty: 'Dim Sum Specialist', img: 'https://placehold.co/400x400/E2E8F0/4A5568?text=Chef+L', price: 290 },
+    ];
+    
+    const dishData = {
+        indian: [
+            { name: 'Paneer Butter Masala', time: 45, nutrition: { protein: 15, carbs: 20, fat: 25 } },
+            { name: 'Vegetable Biryani', time: 60, nutrition: { protein: 10, carbs: 40, fat: 15 } },
+            { name: 'Chicken Tikka Masala', time: 75, nutrition: { protein: 30, carbs: 15, fat: 20 } },
+            { name: 'Dal Makhani', time: 90, nutrition: { protein: 12, carbs: 30, fat: 18 } },
+        ],
+        italian: [
+            { name: 'Mushroom Risotto', time: 40, nutrition: { protein: 8, carbs: 35, fat: 15 } },
+            { name: 'Spaghetti Carbonara', time: 30, nutrition: { protein: 25, carbs: 45, fat: 22 } },
+            { name: 'Margherita Pizza', time: 50, nutrition: { protein: 18, carbs: 50, fat: 20 } },
+        ],
+        chinese: [
+            { name: 'Veg Hakka Noodles', time: 25, nutrition: { protein: 9, carbs: 40, fat: 12 } },
+            { name: 'Chilli Chicken', time: 35, nutrition: { protein: 28, carbs: 15, fat: 18 } },
+            { name: 'Spring Rolls', time: 30, nutrition: { protein: 5, carbs: 25, fat: 15 } },
+        ]
+    };
+
+    const farMarGroData = {
+        groceries: [
+            { name: 'Organic Spinach', price: '₹80 / bunch', tag: 'Organic', img: 'https://placehold.co/300x300/A7F3D0/166534?text=Spinach' },
+            { name: 'Indigenous Millets', price: '₹120 / kg', tag: 'Indigenous', img: 'https://placehold.co/300x300/A7F3D0/166534?text=Millets' },
+            { name: 'Fresh Tomatoes', price: '₹60 / kg', tag: 'Organic', img: 'https://placehold.co/300x300/A7F3D0/166534?text=Tomatoes' },
+            { name: 'A2 Milk', price: '₹75 / L', tag: 'Organic', img: 'https://placehold.co/300x300/A7F3D0/166534?text=Milk' },
+        ],
+        appliances: [
+            { name: 'Premium Blender', price: '₹300 / day', img: 'https://placehold.co/300x300/FED7AA/9A3412?text=Blender' },
+            { name: 'Stand Mixer', price: '₹500 / day', img: 'https://placehold.co/300x300/FED7AA/9A3412?text=Mixer' },
+            { name: 'Air Fryer', price: '₹400 / day', img: 'https://placehold.co/300x300/FED7AA/9A3412?text=Air+Fryer' },
+            { name: 'Specialty Oven', price: '₹800 / day', img: 'https://placehold.co/300x300/FED7AA/9A3412?text=Oven' },
+        ]
+    };
+    
+    let currentFilters = { diet: 'veg', cuisine: 'all' };
+    let selectedDishes = [];
+
+    const chefGrid = document.getElementById('chef-grid');
+    
+    function renderChefs() {
+        chefGrid.innerHTML = '';
+        const filteredChefs = chefData.filter(chef => {
+            const dietMatch = currentFilters.diet === 'all' || chef.diet === currentFilters.diet;
+            const cuisineMatch = currentFilters.cuisine === 'all' || chef.cuisine === currentFilters.cuisine;
+            return dietMatch && cuisineMatch;
+        });
+
+        if (filteredChefs.length === 0) {
+            chefGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">No chefs found for the selected filters.</p>`;
+            return;
+        }
+
+        filteredChefs.forEach(chef => {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-md overflow-hidden transform hover:-translate-y-1 transition-transform cursor-pointer';
+            card.innerHTML = `
+                <img class="h-48 w-full object-cover" src="${chef.img}" alt="Chef ${chef.name}">
+                <div class="p-6">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs font-semibold text-blue-500 uppercase tracking-wide">★ ${chef.rating}</p>
+                            <h3 class="text-xl font-semibold mt-1">${chef.name}</h3>
+                        </div>
+                        <div class="text-lg font-bold text-green-600">₹${chef.price}<span class="text-sm font-normal text-gray-500">/hr</span></div>
+                    </div>
+                    <p class="mt-2 text-gray-600">${chef.specialty}</p>
+                    <span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mt-4 capitalize">${chef.cuisine}</span>
+                </div>
+            `;
+            card.addEventListener('click', () => openChefDetails(chef));
+            chefGrid.appendChild(card);
+        });
+    }
+
+    window.openChefDetails = (chef) => {
+        const modalContent = document.getElementById('modal-content');
+        modalContent.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <img class="w-full h-auto object-cover rounded-lg shadow-lg" src="${chef.img}" alt="${chef.name}">
+                    <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+                        <p class="text-sm text-blue-800"><span class="font-bold">Verified Chef</span> &middot; Trustworthy & Professional</p>
+                    </div>
+                </div>
+                <div>
+                    <h2 class="text-3xl font-bold">${chef.name}</h2>
+                    <p class="text-lg text-gray-500 mt-1">${chef.specialty}</p>
+                    <p class="mt-4 text-gray-700">Passionate about authentic flavors and creating unforgettable dining experiences right in your home. Specializes in traditional and contemporary ${chef.cuisine} dishes.</p>
+                    <h3 class="text-xl font-semibold mt-8 mb-4">Choose Your Plan</h3>
+                    <div class="space-y-4">
+                        <div class="border rounded-lg p-4 cursor-pointer hover:border-green-500">
+                            <h4 class="font-bold">One-Time Booking</h4>
+                            <p class="text-sm text-gray-600">Perfect for special occasions. Pay by the hour.</p>
+                            <p class="text-xl font-bold mt-2 text-green-600">₹${chef.price} / hour</p>
+                        </div>
+                        <div class="border rounded-lg p-4 cursor-pointer hover:border-green-500 relative">
+                            <span class="absolute top-0 right-0 bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-bl-lg rounded-tr-md">BEST VALUE</span>
+                            <h4 class="font-bold">30-Day Package</h4>
+                            <p class="text-sm text-gray-600">Ideal for daily meals. Save 15%.</p>
+                            <p class="text-xl font-bold mt-2 text-green-600">₹${Math.round(chef.price * 30 * 0.85)} / month</p>
+                        </div>
+                    </div>
+                    <button onclick='openBillingModal(${JSON.stringify(chef)})' class="w-full mt-8 bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 transition">Book Now & Plan Meal</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('chef-details-modal').classList.add('modal-open');
+    }
+
+    window.openBillingModal = (chef) => {
+        closeModal('chef-details-modal');
+        const dishListContainer = document.getElementById('dish-selection-list');
+        dishListContainer.innerHTML = '';
+        const relevantDishes = dishData[chef.cuisine] || [];
+        relevantDishes.forEach(dish => {
+            const dishEl = document.createElement('div');
+            dishEl.className = 'flex justify-between items-center bg-white p-3 rounded-lg shadow-sm';
+            dishEl.innerHTML = `
+                <div>
+                    <p class="font-semibold">${dish.name}</p>
+                    <p class="text-sm text-gray-500">${dish.time} mins</p>
+                </div>
+                <button class="add-dish-btn px-3 py-1 bg-green-100 text-green-800 text-sm font-semibold rounded-full hover:bg-green-200">+</button>
+            `;
+            dishEl.querySelector('.add-dish-btn').onclick = () => addDishToOrder(dish);
+            dishListContainer.appendChild(dishEl);
+        });
+        document.getElementById('billing-modal').classList.add('modal-open');
+        updateBilling();
+    }
+
+    function addDishToOrder(dish) {
+        selectedDishes.push(dish);
+        updateBilling();
+    }
+    
+    function removeDishFromOrder(index) {
+        selectedDishes.splice(index, 1);
+        updateBilling();
+    }
+
+    function updateBilling() {
+        const selectedDishesList = document.getElementById('selected-dishes-list');
+        const estTimeEl = document.getElementById('estimated-time');
+        const estChefCostEl = document.getElementById('estimated-chef-cost');
+        const estTotalEl = document.getElementById('estimated-total');
+        const maidServiceCheckbox = document.getElementById('maid-service');
+        
+        let totalTime = 0;
+        selectedDishesList.innerHTML = '';
+
+        if (selectedDishes.length === 0) {
+             selectedDishesList.innerHTML = '<p class="text-gray-500">Your selected dishes will appear here.</p>';
+        }
+
+        selectedDishes.forEach((dish, index) => {
+            totalTime += dish.time;
+            const listItem = document.createElement('div');
+            listItem.className = 'flex justify-between items-center text-sm';
+            listItem.innerHTML = `
+                <span>${dish.name}</span>
+                <button class="remove-dish-btn text-red-500 font-bold">✕</button>
+            `;
+            listItem.querySelector('.remove-dish-btn').onclick = () => removeDishFromOrder(index);
+            selectedDishesList.appendChild(listItem);
+        });
+
+        const totalHours = totalTime / 60;
+        const chefCost = totalHours * 250; // Base price from prompt
+        const maidCost = maidServiceCheckbox.checked ? 200 : 0;
+        const totalCost = chefCost + maidCost;
+
+        estTimeEl.textContent = `${totalTime} mins`;
+        estChefCostEl.textContent = `₹${chefCost.toFixed(2)}`;
+        estTotalEl.textContent = `₹${totalCost.toFixed(2)}`;
+    }
+    
+    document.getElementById('maid-service').addEventListener('change', updateBilling);
+
+
+    window.closeModal = (modalId) => {
+        document.getElementById(modalId).classList.remove('modal-open');
+        if (modalId === 'billing-modal') {
+            selectedDishes = [];
+        }
+    }
+
+    document.querySelectorAll('.filter-pill').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const group = e.target.dataset.filterGroup;
+            const value = e.target.dataset.filter;
+            currentFilters[group] = value;
+            document.querySelectorAll(`button[data-filter-group="${group}"]`).forEach(btn => btn.classList.remove('pill-active'));
+            e.target.classList.add('pill-active');
+            renderChefs();
+        });
+    });
+
+    // HealthMe Logic
+    const healthPills = document.querySelectorAll('.health-pill');
+    let healthProfile = { goals: [], restrictions: [] };
+    let healthChart;
+    const generateMealPlanBtn = document.getElementById('generate-meal-plan-btn');
+    const mealPlanSpinner = document.getElementById('meal-plan-spinner');
+
+    healthPills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            pill.classList.toggle('pill-active');
+            const goal = pill.dataset.goal;
+            const restriction = pill.dataset.restriction;
+            
+            if (goal) {
+                if (healthProfile.goals.includes(goal)) {
+                    healthProfile.goals = healthProfile.goals.filter(g => g !== goal);
+                } else {
+                    healthProfile.goals.push(goal);
+                }
+            }
+            if (restriction) {
+                if (healthProfile.restrictions.includes(restriction)) {
+                    healthProfile.restrictions = healthProfile.restrictions.filter(r => r !== restriction);
+                } else {
+                    healthProfile.restrictions.push(restriction);
+                }
+            }
+            // No automatic update, user clicks button
+            // updateHealthRecommendations();
+        });
+    });
+
+    generateMealPlanBtn.addEventListener('click', async () => {
+        const recommendationsEl = document.getElementById('health-recommendations');
+        if (healthProfile.goals.length === 0 && healthProfile.restrictions.length === 0) {
+            recommendationsEl.innerHTML = `<p class="text-red-500">Please select at least one health goal or dietary restriction.</p>`;
+            updateHealthChart([]);
+            return;
+        }
+
+        generateMealPlanBtn.disabled = true;
+        mealPlanSpinner.classList.remove('hidden');
+        recommendationsEl.innerHTML = `<p class="text-gray-500 flex items-center justify-center"><span class="spinner mr-2"></span> Generating your personalized meal plan...</p>`;
+        updateHealthChart([]); // Clear chart while generating
+
+        try {
+            const prompt = `Generate a 3-day personalized meal plan.
+            Health Goals: ${healthProfile.goals.length > 0 ? healthProfile.goals.join(', ') : 'None'}.
+            Dietary Restrictions: ${healthProfile.restrictions.length > 0 ? healthProfile.restrictions.join(', ') : 'None'}.
+            Provide the output as a JSON array of daily plans. Each daily plan should have a 'day' (e.g., "Day 1"), and a 'meals' array. Each meal object should have 'type' (Breakfast, Lunch, Dinner, Snack), 'dishName', 'description', and 'nutrition' (object with protein, carbs, fat in grams). Ensure realistic nutritional values.`;
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = {
+                contents: chatHistory,
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "day": { "type": "STRING" },
+                                "meals": {
+                                    "type": "ARRAY",
+                                    "items": {
+                                        "type": "OBJECT",
+                                        "properties": {
+                                            "type": { "type": "STRING", "enum": ["Breakfast", "Lunch", "Dinner", "Snack"] },
+                                            "dishName": { "type": "STRING" },
+                                            "description": { "type": "STRING" },
+                                            "nutrition": {
+                                                "type": "OBJECT",
+                                                "properties": {
+                                                    "protein": { "type": "NUMBER" },
+                                                    "carbs": { "type": "NUMBER" },
+                                                    "fat": { "type": "NUMBER" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "propertyOrdering": ["day", "meals"]
+                        }
+                    }
+                }
+            };
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                const json = result.candidates[0].content.parts[0].text;
+                const mealPlan = JSON.parse(json);
+                renderMealPlan(mealPlan);
+                calculateAndDisplayNutrition(mealPlan);
+            } else {
+                recommendationsEl.innerHTML = `<p class="text-red-500">Failed to generate meal plan. Please try again.</p>`;
+            }
+        } catch (error) {
+            console.error('Error generating meal plan:', error);
+            recommendationsEl.innerHTML = `<p class="text-red-500">An error occurred: ${error.message}. Please try again.</p>`;
+        } finally {
+            generateMealPlanBtn.disabled = false;
+            mealPlanSpinner.classList.add('hidden');
+        }
+    });
+
+    function renderMealPlan(mealPlan) {
+        const recommendationsEl = document.getElementById('health-recommendations');
+        recommendationsEl.innerHTML = '';
+        mealPlan.forEach(dayPlan => {
+            const dayDiv = document.createElement('div');
+            dayDiv.className = 'mb-6 p-4 bg-gray-50 rounded-lg shadow-sm';
+            dayDiv.innerHTML = `<h4 class="text-lg font-bold mb-3 text-green-700">${dayPlan.day}</h4>`;
+            dayPlan.meals.forEach(meal => {
+                const mealDiv = document.createElement('div');
+                mealDiv.className = 'mb-3 pb-3 border-b border-gray-200 last:border-b-0 last:pb-0';
+                mealDiv.innerHTML = `
+                    <p class="font-semibold">${meal.type}: ${meal.dishName}</p>
+                    <p class="text-sm text-gray-600">${meal.description}</p>
+                    <p class="text-xs text-gray-500 mt-1">Protein: ${meal.nutrition.protein}g, Carbs: ${meal.nutrition.carbs}g, Fat: ${meal.nutrition.fat}g</p>
+                `;
+                dayDiv.appendChild(mealDiv);
+            });
+            recommendationsEl.appendChild(dayDiv);
+        });
+    }
+
+    function calculateAndDisplayNutrition(mealPlan) {
+        const allDishesNutrition = mealPlan.flatMap(dayPlan => dayPlan.meals.map(meal => meal.nutrition));
+        const totalNutrition = allDishesNutrition.reduce((acc, current) => {
+            acc.protein += current.protein;
+            acc.carbs += current.carbs;
+            acc.fat += current.fat;
+            return acc;
+        }, { protein: 0, carbs: 0, fat: 0 });
+
+        updateHealthChart([totalNutrition]); // Pass as an array to match expected parameter
+    }
+    
+    function updateHealthChart(nutritionalData) {
+        const ctx = document.getElementById('healthChart').getContext('2d');
+        
+        let totalProtein = 0;
+        let totalCarbs = 0;
+        let totalFat = 0;
+
+        if (nutritionalData && nutritionalData.length > 0) {
+            nutritionalData.forEach(data => {
+                totalProtein += data.protein;
+                totalCarbs += data.carbs;
+                totalFat += data.fat;
+            });
+        }
+
+        const data = {
+            labels: ['Protein (g)', 'Carbs (g)', 'Fat (g)'],
+            datasets: [{
+                label: 'Nutritional Breakdown',
+                data: [totalProtein, totalCarbs, totalFat],
+                backgroundColor: ['#34D399', '#FBBF24', '#F87171'],
+                hoverOffset: 4
+            }]
+        };
+        
+        if (healthChart) {
+            healthChart.data = data;
+            healthChart.update();
+        } else {
+            healthChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + 'g';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // FarMarGro Logic
+    const fmgGroceriesContainer = document.getElementById('fmg-groceries');
+    const fmgAppliancesContainer = document.getElementById('fmg-appliances');
+    
+    function renderFMG() {
+        fmgGroceriesContainer.innerHTML = '';
+        farMarGroData.groceries.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'bg-white p-4 rounded-lg shadow-sm text-center';
+            card.innerHTML = `
+                <img src="${item.img}" class="w-full h-32 object-cover rounded-md mb-4" />
+                <p class="font-semibold">${item.name}</p>
+                <p class="text-sm text-gray-500">${item.price}</p>
+                <span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded-full mt-2">${item.tag}</span>
+            `;
+            fmgGroceriesContainer.appendChild(card);
+        });
+        
+        fmgAppliancesContainer.innerHTML = '';
+        farMarGroData.appliances.forEach(item => {
+             const card = document.createElement('div');
+            card.className = 'bg-white p-4 rounded-lg shadow-sm text-center';
+            card.innerHTML = `
+                <img src="${item.img}" class="w-full h-32 object-cover rounded-md mb-4" />
+                <p class="font-semibold">${item.name}</p>
+                <p class="text-sm text-gray-500">${item.price}</p>
+                 <button class="mt-2 w-full bg-orange-500 text-white text-sm font-bold py-2 rounded-lg hover:bg-orange-600">Rent Now</button>
+            `;
+            fmgAppliancesContainer.appendChild(card);
+        });
+    }
+
+    document.querySelectorAll('.farmargro-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.farmargro-tab').forEach(t => {
+                t.classList.remove('text-green-600', 'border-green-600');
+                t.classList.add('border-transparent', 'hover:text-gray-600', 'hover:border-gray-300');
+            });
+            e.target.classList.add('text-green-600', 'border-green-600');
+            e.target.classList.remove('border-transparent', 'hover:text-gray-600', 'hover:border-gray-300');
+            
+            if (e.target.id === 'fmg-tab-groceries') {
+                fmgGroceriesContainer.classList.remove('hidden');
+                fmgAppliancesContainer.classList.add('hidden');
+            } else {
+                fmgGroceriesContainer.classList.add('hidden');
+                fmgAppliancesContainer.classList.remove('hidden');
+            }
+        })
+    });
+    
+    // Mobile menu
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+    });
+
+    // Nav active state on scroll
+    const sections = document.querySelectorAll('section');
+    const navLinks = document.querySelectorAll('.nav-link');
+    window.onscroll = () => {
+        let current = '';
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop;
+            if (pageYOffset >= sectionTop - 68) {
+                current = section.getAttribute('id');
+            }
+        });
+
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if (link.getAttribute('href').includes(current)) {
+                link.classList.add('active');
+            }
+        });
+    };
+
+    // Initial renders
+    renderChefs();
+    renderFMG();
+    updateHealthChart([]); // Initialize chart with empty data
+});
+</script>
+</body>
+</html>
